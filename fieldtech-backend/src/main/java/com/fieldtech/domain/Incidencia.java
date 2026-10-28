@@ -32,7 +32,7 @@ public class Incidencia {
     @Column(nullable = false, length = 30)
     private String estado;
 
-    @Column(name = "fecha_registro")
+    @Column(name = "fecha_reporte")
     private LocalDateTime fechaReporte;
 
     @Column(name = "tecnico_codigo", nullable = false, length = 50)
