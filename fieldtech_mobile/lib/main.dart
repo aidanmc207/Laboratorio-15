@@ -1,121 +1,322 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'data/database_helper.dart';
+import 'services/hardware_service.dart';
+import 'services/sync_service.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const FieldTechApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class FieldTechApp extends StatelessWidget {
+  const FieldTechApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'FieldTech Móvil',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0284C7),
+          brightness: Brightness.light,
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const IncidenciasScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class IncidenciasScreen extends StatefulWidget {
+  const IncidenciasScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<IncidenciasScreen> createState() => _IncidenciasScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _IncidenciasScreenState extends State<IncidenciasScreen> {
+  // 10.0.2.2 apunta a la maquina anfitriona desde el emulador de Android
+  final SyncService _syncService = SyncService(
+    backendUrl: 'http://10.0.2.2:8080',
+  );
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  List<Map<String, dynamic>> _incidencias = [];
+  bool _cargando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarIncidenciasLocales();
+  }
+
+  Future<void> _cargarIncidenciasLocales() async {
+    final datos = await DatabaseHelper.instance.obtenerTodas();
+    setState(() => _incidencias = datos);
+  }
+
+  Future<void> _sincronizar() async {
+    setState(() => _cargando = true);
+    final total = await _syncService.ejecutarSincronizacion('TEC-CR-001');
+    await _cargarIncidenciasLocales();
+    setState(() => _cargando = false);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            total > 0
+                ? '¡Sincronización exitosa! ($total registros enviados).'
+                : 'No hay registros pendientes o el servidor no respondió.',
+          ),
+          backgroundColor: total > 0 ? Colors.green[700] : Colors.orange[800],
+        ),
+      );
+    }
+  }
+
+  void _abrirFormularioModal() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => NuevaIncidenciaModal(
+        onGuardado: _cargarIncidenciasLocales,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('FieldTech Inspecciones'),
+        actions: [
+          IconButton(
+            icon: _cargando
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.sync),
+            tooltip: 'Sincronizar con Servidor',
+            onPressed: _cargando ? null : _sincronizar,
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: _incidencias.isEmpty
+          ? const Center(
+              child: Text(
+                'No hay inspecciones registradas.\nPresione + para crear una.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+            )
+          : ListView.builder(
+              itemCount: _incidencias.length,
+              itemBuilder: (ctx, index) {
+                final item = _incidencias[index];
+                final bool sincronizado = item['is_synced'] == 1;
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  elevation: 2,
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          sincronizado ? Colors.green[100] : Colors.amber[100],
+                      child: Icon(
+                        sincronizado ? Icons.cloud_done : Icons.cloud_off,
+                        color: sincronizado ? Colors.green[800] : Colors.amber[900],
+                      ),
+                    ),
+                    title: Text(
+                      item['titulo'],
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      '${item['categoria']} | Lat: ${item['latitud']}, Lon: ${item['longitud']}',
+                    ),
+                    trailing: Text(
+                      sincronizado ? 'En Servidor' : 'Offline',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: sincronizado ? Colors.green[700] : Colors.amber[900],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _abrirFormularioModal,
+        icon: const Icon(Icons.add_a_photo),
+        label: const Text('Nueva Incidencia'),
+      ),
+    );
+  }
+}
+
+class NuevaIncidenciaModal extends StatefulWidget {
+  final VoidCallback onGuardado;
+  const NuevaIncidenciaModal({super.key, required this.onGuardado});
+
+  @override
+  State<NuevaIncidenciaModal> createState() => _NuevaIncidenciaModalState();
+}
+
+class _NuevaIncidenciaModalState extends State<NuevaIncidenciaModal> {
+  final _tituloController = TextEditingController();
+  final _descController = TextEditingController();
+  final HardwareService _hardware = HardwareService();
+
+  String _categoria = 'INFRAESTRUCTURA';
+  Position? _posicion;
+  File? _foto;
+  bool _obteniendoGps = false;
+
+  Future<void> _capturarGPS() async {
+    setState(() => _obteniendoGps = true);
+    try {
+      final pos = await _hardware.capturarUbicacionGPS();
+      setState(() => _posicion = pos);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _obteniendoGps = false);
+    }
+  }
+
+  Future<void> _capturarCamara() async {
+    final imagen = await _hardware.tomarFotografia();
+    if (imagen != null) {
+      setState(() => _foto = imagen);
+    }
+  }
+
+  Future<void> _guardarEnSQLite() async {
+    if (_tituloController.text.trim().isEmpty || _posicion == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe ingresar un título y capturar las coordenadas GPS.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final row = {
+      'titulo': _tituloController.text.trim(),
+      'descripcion': _descController.text.trim(),
+      'categoria': _categoria,
+      'latitud': _posicion!.latitude,
+      'longitud': _posicion!.longitude,
+      'foto_path': _foto?.path,
+      'is_synced': 0,
+      'fecha_creacion': DateTime.now().toIso8601String(),
+    };
+
+    await DatabaseHelper.instance.insertar(row);
+    widget.onGuardado();
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        left: 20,
+        right: 20,
+        top: 20,
+      ),
+      child: SingleChildScrollView(
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            const Text(
+              'Registrar Incidencia en Campo',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _tituloController,
+              decoration: const InputDecoration(
+                labelText: 'Título de la Incidencia',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _descController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Descripción técnica',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _categoria,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'INFRAESTRUCTURA', child: Text('Infraestructura')),
+                DropdownMenuItem(value: 'RED_ACCESO', child: Text('Red de Acceso')),
+                DropdownMenuItem(value: 'TORRE_RADIO', child: Text('Torre de Radio')),
+              ],
+              onChanged: (v) => setState(() => _categoria = v!),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _obteniendoGps ? null : _capturarGPS,
+                    icon: _obteniendoGps
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location),
+                    label: Text(
+                      _posicion != null
+                          ? 'GPS: ${_posicion!.latitude.toStringAsFixed(3)}, ${_posicion!.longitude.toStringAsFixed(3)}'
+                          : 'Obtener GPS',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                IconButton.filledTonal(
+                  onPressed: _capturarCamara,
+                  icon: const Icon(Icons.camera_alt),
+                  tooltip: 'Tomar Fotografía',
+                ),
+              ],
+            ),
+            if (_foto != null) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(_foto!, height: 120, fit: BoxFit.cover),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _guardarEnSQLite,
+              child: const Text('Guardar Localmente (Offline)'),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
