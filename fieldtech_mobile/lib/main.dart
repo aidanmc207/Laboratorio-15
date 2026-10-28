@@ -80,6 +80,7 @@ class _IncidenciasScreenState extends State<IncidenciasScreen> {
   void _abrirFormularioModal() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (ctx) => NuevaIncidenciaModal(
         onGuardado: _cargarIncidenciasLocales,
       ),
