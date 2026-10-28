@@ -37,7 +37,7 @@ class SyncService {
         final streamedRes = await request.send().timeout(
           const Duration(seconds: 15),
         );
-        if (streamedRes.statusCode == 200) {
+        if (streamedRes.statusCode == 200 || streamedRes.statusCode == 201) {
           await dbHelper.marcarSincronizado(localId);
           enviadasConExito++;
         }
