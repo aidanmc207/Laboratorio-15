@@ -109,6 +109,7 @@ class _IncidenciasScreenState extends State<IncidenciasScreen> {
               showSelectedIcon: false,
               onSelectionChanged: (seleccion) {
                 setState(() => _filtro = seleccion.first);
+                _cargarIncidenciasLocales();
               },
             ),
           ),
