@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fieldtech_mobile/main.dart';
+import 'package:fieldtech_mobile/screens/nueva_incidencia_modal.dart';
 
 void main() {
   testWidgets('El formulario muestra los campos de la incidencia', (WidgetTester tester) async {
