@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../models/filtro_incidencia.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -48,6 +49,28 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> obtenerTodas() async {
     final db = await instance.database;
     return await db.query('incidencias_locales', orderBy: 'id DESC');
+  }
+
+  Future<List<Map<String, dynamic>>> obtenerPorFiltro(FiltroIncidencia filtro) async {
+    final db = await instance.database;
+    switch (filtro) {
+      case FiltroIncidencia.offline:
+        return await db.query(
+          'incidencias_locales',
+          where: 'is_synced = ?',
+          whereArgs: [0],
+          orderBy: 'id DESC',
+        );
+      case FiltroIncidencia.sincronizadas:
+        return await db.query(
+          'incidencias_locales',
+          where: 'is_synced = ?',
+          whereArgs: [1],
+          orderBy: 'id DESC',
+        );
+      case FiltroIncidencia.todas:
+        return await obtenerTodas();
+    }
   }
 
   Future<List<Map<String, dynamic>>> obtenerPendientes() async {

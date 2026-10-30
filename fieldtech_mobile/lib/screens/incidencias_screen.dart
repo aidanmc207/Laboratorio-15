@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/database_helper.dart';
+import '../models/filtro_incidencia.dart';
 import '../services/sync_service.dart';
 import 'nueva_incidencia_modal.dart';
 
@@ -18,6 +19,7 @@ class _IncidenciasScreenState extends State<IncidenciasScreen> {
 
   List<Map<String, dynamic>> _incidencias = [];
   bool _cargando = false;
+  FiltroIncidencia _filtro = FiltroIncidencia.todas;
 
   @override
   void initState() {
@@ -26,7 +28,7 @@ class _IncidenciasScreenState extends State<IncidenciasScreen> {
   }
 
   Future<void> _cargarIncidenciasLocales() async {
-    final datos = await DatabaseHelper.instance.obtenerTodas();
+    final datos = await DatabaseHelper.instance.obtenerPorFiltro(_filtro);
     setState(() => _incidencias = datos);
   }
 
@@ -81,6 +83,36 @@ class _IncidenciasScreenState extends State<IncidenciasScreen> {
             onPressed: _cargando ? null : _sincronizar,
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: SegmentedButton<FiltroIncidencia>(
+              segments: const [
+                ButtonSegment(
+                  value: FiltroIncidencia.todas,
+                  label: Text('Todas'),
+                  icon: Icon(Icons.list),
+                ),
+                ButtonSegment(
+                  value: FiltroIncidencia.offline,
+                  label: Text('Offline'),
+                  icon: Icon(Icons.cloud_off),
+                ),
+                ButtonSegment(
+                  value: FiltroIncidencia.sincronizadas,
+                  label: Text('Sincronizadas'),
+                  icon: Icon(Icons.cloud_done),
+                ),
+              ],
+              selected: {_filtro},
+              showSelectedIcon: false,
+              onSelectionChanged: (seleccion) {
+                setState(() => _filtro = seleccion.first);
+              },
+            ),
+          ),
+        ),
       ),
       body: _incidencias.isEmpty
           ? const Center(
