@@ -267,7 +267,7 @@ class _NuevaIncidenciaModalState extends State<NuevaIncidenciaModal> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _categoria,
+              initialValue: _categoria,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(value: 'INFRAESTRUCTURA', child: Text('Infraestructura')),
